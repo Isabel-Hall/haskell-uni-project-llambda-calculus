@@ -87,12 +87,13 @@ t3 = At "a" :-> At "c" :-> At "c"
 
 ------------------------- Assignment 1
 
+--Determine if an atom occurs in a type
 occurs :: Atom -> Type -> Bool
 occurs a (At b)       = a == b
 occurs a (At b :-> s) = a == b || occurs a s
 occurs a (t :-> s)    = occurs a t || occurs a s
 
-
+--Return the atoms that occur in a type in an alphabetical list
 findAtoms :: Type -> [Atom]
 findAtoms (At a)       = [a]
 findAtoms (At a :-> s) = [a] `merge` findAtoms s
@@ -115,6 +116,7 @@ s3 = ("c", At "a" :-> At "a")
 
 ------------------------- Assignment 2
 
+--Apply a substitution, following the rules of the lambda calculus
 sub :: Sub -> Type -> Type
 sub (a, t) (At b)
   | a == b               = t
@@ -126,7 +128,7 @@ sub (a, t) (At b :-> s)
   | otherwise            = At b :-> s
 sub (a, t) (b :-> s)     = sub (a, t) b :-> sub (a, t) s
 
-
+--Apply a list of substitutions to a type, applying the head of the list last
 subs :: [Sub] -> Type -> Type
 subs xs t = foldr sub t xs
 
@@ -154,10 +156,12 @@ st1 = ([],[u1,u2])
 
 ------------------------- Assignment 3
 
+--Apply a substitution to a list of unification pairs
 sub_u :: Sub -> [Upair] -> [Upair]
 sub_u s us = [((sub s u1), (sub s u2)) | (u1, u2) <- us]
 
 
+--Carry out a single transition of the unification algorithm from the lambda calculus
 step :: State -> State
 step (ss, [])    = (ss, [])
 step (ss, (At u1, At u2): us)
@@ -180,6 +184,7 @@ step (ss, (u1, u2): us) = (ss, [(u1', u2'),(u1'', u2'')] ++ us)
     (u2':-> u2'') = u2
 
 
+--Carry out the full unification algorithm
 unify :: [Upair] -> [Sub]
 unify [] = []
 unify us = unify us' ++ ss
@@ -188,6 +193,7 @@ unify us = unify us' ++ ss
 
 ------------------------- Assignment 4
 
+--Create types for Context, Judgement and Derivation
 type Context   = [(Var, Type)]
 type Judgement = (Context, Term, Type)
 
@@ -218,17 +224,21 @@ d2 = Application ([("y",At "b")],Apply (Lambda "x" (Apply (Variable "x") (Variab
      ) )
 
 
+--Extract the concluding judgement from a derivation
 conclusion :: Derivation -> Judgement
 conclusion (Axiom j)           = j
 conclusion (Abstraction j _)   = j 
 conclusion (Application j _ _) = j
 
+--Apply a list of substitutions to every type in a Context
 subs_ctx :: [Sub] -> Context -> Context
 subs_ctx ss ctx = [(v, (subs ss t)) | (v, t) <- ctx]
 
+--Apply a list of substitutions to every type in a Judgement
 subs_jdg :: [Sub] -> Judgement -> Judgement
 subs_jdg ss (ctx, ter, typ) = ((subs_ctx ss ctx), ter, (subs ss typ))
 
+--Apply a list of substitutions to every type in a Derivation
 subs_der :: [Sub] -> Derivation -> Derivation
 subs_der ss (Axiom j)             = Axiom (subs_jdg ss j)
 subs_der ss (Abstraction j d)     = Abstraction (subs_jdg ss j) (subs_der ss d)
@@ -283,7 +293,7 @@ instance Show Derivation where
 
 ------------------------- Assignment 5
 
-
+--Create an incomplete derivation from a lambda term (leaving the types empty as At "")
 derive0 :: Term -> Derivation
 derive0 t = aux ([(var, At "") | var <- free t], t, At "")
   where
@@ -294,7 +304,7 @@ derive0 t = aux ([(var, At "") | var <- free t], t, At "")
         addContext ctx x = [(v, t) | (v, t) <- ctx, v /= x] ++ [(x, At "")]
     aux (ctx, Apply m n, typ)  = Application (ctx, Apply m n, typ) (aux (ctx, m, At "")) (aux (ctx, n, At ""))
 
-
+--Create an incomplete derivation from a lambda term, where all the types are fresh atoms
 derive1 :: Term -> Derivation
 derive1 t = aux (drop (1 + length (free t)) atoms) ([(var, At om) | (var, om) <- zip (free t) (tail atoms)], t, At (head atoms))
   where
@@ -307,7 +317,7 @@ derive1 t = aux (drop (1 + length (free t)) atoms) ([(var, At om) | (var, om) <-
         evenAts = tail [a | (a, i) <- zip ats [1..], even i]
         oddAts  = tail [a | (a, i) <- zip ats [1..], odd i]
 
-
+--Extract unification pairs from an incomplete derivation, generated using derive1
 upairs :: Derivation -> [Upair]
 upairs (Axiom (ctx, Variable t, typ))         = [(typ, getTypeCtx ctx t)]
 upairs (Abstraction (ctx, Lambda x t, typ) d) = (typ, getTypeCtx (getContextDer d) x :-> getTypeDer d) : upairs d
@@ -327,7 +337,7 @@ getContextDer (Axiom (ctx, _, _))             = ctx
 getContextDer (Abstraction (ctx, _, _) d)     = ctx 
 getContextDer (Application (ctx, _, _) d1 d2) = ctx 
 
-
+--Produce a type derivation for a term, if one exists
 derive :: Term -> Derivation
 derive t = subs_der (unify (upairs der)) der
   where der = derive1 t
